@@ -6,7 +6,7 @@ version := "0.1"
 
 scalaVersion := "2.12.9"
 
-libraryDependencies ++= Seq(zio, scalatest)
+libraryDependencies ++= Seq(zio, scalatest) ++ lwjgl ++ nativesLwjgl
 
 addCompilerPlugin(betterMonadicFor)
 addCompilerPlugin(kindProjector)
