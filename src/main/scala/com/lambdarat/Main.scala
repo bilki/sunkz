@@ -1,7 +1,6 @@
 package com.lambdarat
 
 import zio.ZIO.succeed
-import zio.clock.Clock
 import zio.console._
 import zio.{App, RIO, URIO}
 
@@ -11,7 +10,7 @@ import com.lambdarat.ui.ZWindowSystem._
 
 object Main extends App {
 
-  sealed abstract class GlfwError(val msg: String) extends Exception
+  sealed abstract class GlfwError(val msg: String) extends Exception(msg)
   object GlfwError {
     final case object GlfwInitError           extends GlfwError("GLFW Initialization error")
     final case object GlfwWindowCreationError extends GlfwError("GLFW Window creation error")
@@ -19,22 +18,16 @@ object Main extends App {
 
   override def run(args: List[String]): URIO[Main.Environment, Int] =
     main
-      .provideSome[Environment](
-        base =>
-          new WindowSystem with Clock {
-            override def window: WindowSystem.Service = WindowSystem.Live.window
-            override val clock: Clock.Service[Any]    = base.clock
-          }
-      )
+      .provide(WindowSystem.Live)
       .foldM(
         err => putStrLn(s"[SUNKZ] Failure with error [${err.getMessage}]") *> succeed(1),
         succeed
       )
 
-  def main: RIO[WindowSystem with Clock, Int] =
+  def main: RIO[WindowSystem, Int] =
     for {
       _   <- initWindowSystem
-      wid <- createWindow(WindowWidth(300), WindowHeight(300), "Hello world!")
+      wid <- createWindow(WindowWidth(300), WindowHeight(300), "Sunkz!")
       _   <- showWindow(wid)
       _   <- loopUntilClosed(wid)
       _   <- destroyWindow(wid)

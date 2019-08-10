@@ -1,7 +1,6 @@
 package com.lambdarat.ui
 
 import java.nio.IntBuffer
-import java.util.Random
 import java.util.concurrent.Executors
 
 import org.lwjgl.glfw.Callbacks._
@@ -18,6 +17,7 @@ import zio.ZIO._
 import zio.clock.Clock
 import zio.duration._
 import zio.internal.Executor
+import zio.random.Random
 import zio.{Managed, RIO, Schedule, Task}
 
 import com.lambdarat.Main.GlfwError.{GlfwInitError, GlfwWindowCreationError}
@@ -37,7 +37,7 @@ object WindowSystem {
     def initialize: Task[Unit]
     def createWindow(width: WindowWidth, height: WindowHeight, title: String): Task[WindowId]
     def showWindow(windowId: WindowId): Task[Unit]
-    def loopUntilClosed(windowId: WindowId): RIO[Clock, Unit]
+    def loopUntilClosed(windowId: WindowId): Task[Unit]
     def destroyWindow(windowId: WindowId): Task[Unit]
   }
 
@@ -58,15 +58,10 @@ object WindowSystem {
         } yield ()
 
       private def setCloseWindowToEsc(windowId: WindowId): Task[Unit] =
-        effect(
-          glfwSetKeyCallback(
-            windowId,
-            (window, key, _, action, _) => {
-              val shouldClose = key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE
-              glfwSetWindowShouldClose(window, shouldClose)
-            }
-          )
-        )
+        effect(glfwSetKeyCallback(windowId, (window, key, _, action, _) => {
+          val shouldClose = key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE
+          glfwSetWindowShouldClose(window, shouldClose)
+        }))
 
       override def createWindow(
           width: WindowWidth,
@@ -114,23 +109,33 @@ object WindowSystem {
         } yield ()
       }
 
-      override def loopUntilClosed(windowId: WindowId): RIO[Clock, Unit] = {
-        val loop = for {
+      private def paintRandomColor(windowId: WindowId): RIO[Random, Unit] =
+        for {
+          colorRng       <- access[Random](_.random)
+          ((c1, c2), c3) <- colorRng.nextFloat &&& colorRng.nextFloat &&& colorRng.nextFloat
+          _              <- effect(glClearColor(c1, c2, c3, 0.0f))
+          _              <- effect(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT))
+          _              <- effect(glfwSwapBuffers(windowId))
+        } yield ()
+
+      private val clockWithRandom: Clock with Random = new Clock with Random {
+        override val clock: Clock.Service[Any]   = Clock.Live.clock
+        override val random: Random.Service[Any] = Random.Live.random
+      }
+
+      override def loopUntilClosed(windowId: WindowId): Task[Unit] = {
+        val whileNotClosed = for {
           shouldClose <- effect(glfwWindowShouldClose(windowId))
-          colorRng = new Random()
-          color    = (colorRng.nextFloat(), colorRng.nextFloat(), colorRng.nextFloat())
-          _ <- effect(glClearColor(color._1, color._2, color._3, 0.0f)).lock(renderEC)
-          _ <- effect(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)).lock(renderEC)
-          _ <- effect(glfwSwapBuffers(windowId)).lock(renderEC)
-          _ <- when(!shouldClose)(effect(glfwPollEvents()))
+          _           <- when(!shouldClose)(paintRandomColor(windowId).lock(renderEC))
+          _           <- when(!shouldClose)(effect(glfwPollEvents()))
         } yield shouldClose
 
         // ~20 FPS
-        val every500ms = Schedule.doUntil[Boolean](Predef.identity) && Schedule.spaced(5.millis)
+        val every5ms = Schedule.doUntil[Boolean](Predef.identity) && Schedule.spaced(5.millis)
 
         for {
           _ <- effect(GL.createCapabilities()).lock(renderEC)
-          _ <- loop.repeat(every500ms)
+          _ <- whileNotClosed.repeat(every5ms).provide(clockWithRandom)
         } yield ()
       }
 
@@ -154,7 +159,7 @@ object ZWindowSystem {
   ): RIO[WindowSystem, WindowId] = accessM(_.window.createWindow(width, height, title))
   def showWindow(windowId: WindowId): RIO[WindowSystem, Unit] =
     accessM(_.window.showWindow(windowId))
-  def loopUntilClosed(windowId: WindowId): RIO[WindowSystem with Clock, Unit] =
+  def loopUntilClosed(windowId: WindowId): RIO[WindowSystem, Unit] =
     accessM(_.window.loopUntilClosed(windowId))
   def destroyWindow(windowId: WindowId): RIO[WindowSystem, Unit] =
     accessM(_.window.destroyWindow(windowId))
