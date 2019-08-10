@@ -17,7 +17,7 @@ object Main extends App {
     final case object GlfwWindowCreationError extends GlfwError("GLFW Window creation error")
   }
 
-  override def run(args: List[String]): URIO[Main.Environment, Int] = {
+  override def run(args: List[String]): URIO[Main.Environment, Int] =
     main
       .provideSome[Environment](
         base =>
@@ -30,7 +30,6 @@ object Main extends App {
         err => putStrLn(s"[SUNKZ] Failure with error [${err.getMessage}]") *> succeed(1),
         succeed
       )
-  }
 
   def main: RIO[WindowSystem with Clock, Int] =
     for {

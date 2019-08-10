@@ -11,7 +11,8 @@ object Dependencies {
     "org.lwjgl" % "lwjgl"         % lwjglVersion,
     "org.lwjgl" % "lwjgl-glfw"    % lwjglVersion,
     "org.lwjgl" % "lwjgl-nanovg"  % lwjglVersion,
-    "org.lwjgl" % "lwjgl-nuklear" % lwjglVersion
+    "org.lwjgl" % "lwjgl-nuklear" % lwjglVersion,
+    "org.lwjgl" % "lwjgl-opengl"  % lwjglVersion
   )
 
   lazy val nativesLwjgl = lwjgl.map(_.classifier("natives-linux") % "runtime")

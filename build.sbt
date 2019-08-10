@@ -10,3 +10,5 @@ libraryDependencies ++= Seq(zio, scalatest) ++ lwjgl ++ nativesLwjgl
 
 addCompilerPlugin(betterMonadicFor)
 addCompilerPlugin(kindProjector)
+
+fork in run := true
